@@ -1,0 +1,450 @@
+:root {
+    --primary: #4361ee;
+    --secondary: #3f37c9;
+    --success: #4cc9f0;
+    --info: #4895ef;
+    --warning: #f72585;
+    --danger: #ff5a5f;
+    --light: #f8f9fa;
+    --dark: #212529;
+    --gradient: linear-gradient(45deg, #4361ee, #3a0ca3);
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f5f7fa;
+    color: #333;
+    margin: 0;
+    padding: 0;
+}
+
+.hero-section {
+    background: var(--gradient);
+    color: white;
+    padding: 3rem 0;
+    margin-bottom: 2rem;
+    border-radius: 0 0 20px 20px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.hero-section h1 {
+    margin-bottom: 1rem;
+    animation: fadeIn 1s ease-in-out;
+}
+
+.hero-section p {
+    font-size: 1.25rem;
+    opacity: 0.9;
+}
+
+.main-container {
+    min-height: 70vh;
+    margin-bottom: 3rem;
+}
+
+.search-card {
+    border: none;
+    border-radius: 12px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+    margin-bottom: 2rem;
+    background: #fff;
+    transition: all 0.3s ease;
+}
+
+.search-card:hover {
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
+}
+
+.search-card .card-title {
+    color: var(--primary);
+    font-weight: 600;
+}
+
+.form-label {
+    font-weight: 500;
+    color: #555;
+    margin-bottom: 0.5rem;
+}
+
+.form-select, .form-control {
+    border-radius: 8px;
+    border: 1px solid #e1e5eb;
+    padding: 0.6rem 1rem;
+    font-size: 0.95rem;
+    box-shadow: none;
+    transition: all 0.3s ease;
+}
+
+.form-select:focus, .form-control:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.2);
+}
+
+.search-button {
+    background: var(--gradient);
+    border: none;
+    border-radius: 8px;
+    padding: 0.6rem 1.5rem;
+    font-size: 0.95rem;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.search-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(67, 97, 238, 0.3);
+}
+
+.search-button i {
+    margin-right: 0.5rem;
+}
+
+.results-section {
+    padding: 1rem 0;
+}
+
+.job-card {
+    transition: transform 0.2s, box-shadow 0.2s;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid #e1e5eb;
+}
+
+.job-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+}
+
+.job-card .card-header {
+    background: white;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    padding: 1rem 1.25rem;
+    position: relative;
+}
+
+.job-card .card-title {
+    font-weight: 600;
+    color: var(--dark);
+    margin-bottom: 0.5rem;
+    padding-right: 80px; /* Make room for the badge */
+    line-height: 1.4;
+}
+
+.job-card .company-name {
+    color: var(--primary);
+    font-weight: 500;
+    margin-bottom: 0.75rem;
+    display: block;
+}
+
+.job-card .source-badge {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    font-size: 0.7rem;
+    padding: 0.35em 0.65em;
+    border-radius: 4px;
+}
+
+.job-card .source-tag {
+    display: inline-block;
+    font-size: 0.75rem;
+    margin-bottom: 0.5rem;
+    color: #666;
+}
+
+.job-card .source-tag.seek {
+    color: #e74c3c;
+}
+
+.job-card .source-tag.gradconnection {
+    color: #2980b9;
+}
+
+.job-card .source-tag.prosple {
+    color: #27ae60;
+}
+
+.job-card .card-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 1.25rem;
+}
+
+.job-card .job-details-container {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.job-card .job-detail {
+    display: grid;
+    grid-template-columns: 24px 1fr;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.job-card .job-detail i {
+    color: var(--primary);
+    font-size: 0.9rem;
+    width: 24px;
+    text-align: center;
+}
+
+.job-card .job-detail span {
+    color: #555;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.job-card .job-title {
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    font-size: 1.1rem;
+    line-height: 1.4;
+}
+
+.job-card .job-details {
+    margin-top: auto;
+    padding-top: 1rem;
+}
+
+.job-card .job-meta {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.5rem 1rem;
+    align-items: start;
+    margin-bottom: 1rem;
+}
+
+.job-card .job-meta .meta-label {
+    font-weight: 500;
+    color: #555;
+}
+
+.job-card .job-meta .meta-value {
+    color: #666;
+}
+
+.job-card .badge {
+    font-size: 0.75rem;
+    padding: 0.35em 0.65em;
+}
+
+.job-card .btn-apply {
+    background: var(--gradient);
+    border: none;
+    border-radius: 6px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    margin-top: auto;
+    padding: 0.6rem 1rem;
+}
+
+.job-card .btn-apply:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(67, 97, 238, 0.3);
+}
+
+.job-card .badge-seek {
+    background-color: #e74c3c;
+    color: white;
+}
+
+.job-card .badge-gradconnection {
+    background-color: #2980b9;
+    color: white;
+}
+
+.job-card .badge-prosple {
+    background-color: #27ae60;
+    color: white;
+}
+
+.initial-message {
+    padding: 3rem 0;
+}
+
+.initial-message i {
+    color: #ccc;
+}
+
+.footer {
+    background-color: #f8f9fa;
+    border-top: 1px solid #e9ecef;
+}
+
+#loader {
+    padding: 3rem 0;
+}
+
+/* Progress Bar Styling */
+#progress-container {
+    animation: fadeIn 0.5s ease-in-out;
+    margin-bottom: 1.5rem;
+    background-color: #f8f9fa;
+    padding: 1rem;
+    border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+#progress-status {
+    font-size: 0.9rem;
+    color: #555;
+    max-width: 80%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#progress-percentage {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--primary);
+}
+
+.progress {
+    background-color: #e9ecef;
+    border-radius: 30px;
+    overflow: hidden;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+    height: 15px;
+}
+
+.progress-bar {
+    background: var(--gradient);
+    transition: width 0.3s ease;
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+    line-height: 15px;
+}
+
+/* Error and Warning Messages */
+.text-warning {
+    color: #f39c12 !important;
+    font-weight: 500;
+}
+
+.text-danger {
+    color: #e74c3c !important;
+    font-weight: 500;
+}
+
+/* Alert boxes for warnings and errors */
+.alert-warning {
+    background-color: #fff3cd;
+    border-color: #ffeeba;
+    color: #856404;
+    border-radius: 8px;
+    padding: 0.75rem 1.25rem;
+    margin-bottom: 1rem;
+}
+
+.alert-danger {
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+    color: #721c24;
+    border-radius: 8px;
+    padding: 0.75rem 1.25rem;
+    margin-bottom: 1rem;
+}
+
+/* Advanced Filters Styling */
+#advanced-filters {
+    border: none;
+    border-radius: 12px;
+    background-color: #f8fafd;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    margin-bottom: 1.5rem;
+    transition: all 0.3s ease;
+    animation: slideDown 0.4s ease-in-out;
+}
+
+#advanced-filters .card-subtitle {
+    color: var(--primary);
+    font-weight: 600;
+}
+
+#advanced-filters .form-label {
+    font-size: 0.85rem;
+}
+
+#advanced-filters .form-check-label {
+    font-size: 0.9rem;
+}
+
+#toggle-filters-btn {
+    font-size: 0.85rem;
+    padding: 0.3rem 0.7rem;
+    border-radius: 20px;
+}
+
+/* No results message styling */
+.no-results {
+    text-align: center;
+    padding: 3rem 0;
+}
+
+.no-results i {
+    font-size: 3rem;
+    color: #ccc;
+    margin-bottom: 1rem;
+}
+
+.no-results p {
+    color: #666;
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+/* Animation */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes slideDown {
+    from { 
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to { 
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 767px) {
+    .hero-section {
+        padding: 2rem 0;
+    }
+
+    .hero-section h1 {
+        font-size: 2rem;
+    }
+    
+    .search-button {
+        width: 100%;
+        margin-top: 1rem;
+    }
+    
+    #progress-container {
+        margin-bottom: 1.5rem;
+    }
+    
+    #advanced-filters .row > div {
+        margin-bottom: 0.5rem;
+    }
+}
+
+.col-md-6.col-lg-4.job-result-item {
+    margin-bottom: 1.5rem;
+    padding: 0 12px;
+} 

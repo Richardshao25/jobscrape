@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JobScrape - Find Your Perfect Job</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="hero-section">
+        <div class="container">
+            <div class="row justify-content-center">
+                <div class="col-md-10 text-center">
+                    <h1 class="display-4 fw-bold">JobScrape</h1>
+                    <p class="lead">Find the perfect internship or graduate job from multiple sources</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container main-container">
+        <!-- Search Filters Section -->
+        <div class="card search-card">
+            <div class="card-body">
+                <h5 class="card-title mb-4"><i class="fas fa-filter"></i> Search Filters</h5>
+                <form id="search-form">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label for="job-level" class="form-label">Job Level</label>
+                            <select class="form-select" id="job-level" required>
+                                <option value="graduate-jobs">Graduate Jobs</option>
+                                <option value="internships">Internships</option>
+                                <option value="entry-level-jobs">Entry Level Jobs</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="discipline" class="form-label">Discipline</label>
+                            <select class="form-select" id="discipline" required>
+                                <option value="computer-science">Computer Science</option>
+                                <option value="data-science-and-analytics">Data Science</option>
+                                <option value="engineering">Engineering</option>
+                                <option value="finance">Finance</option>
+                                <option value="mathematics">Mathematics</option>
+                                <option value="accounting">Accounting</option>
+                                <option value="marketing">Marketing</option>
+                                <option value="business">Business</option>
+                                <option value="information-technology">Information Technology</option>
+                                <option value="health-sciences">Health Sciences</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="location" class="form-label">Location</label>
+                            <select class="form-select" id="location" required>
+                                <option value="australia">Australia (All)</option>
+                                <option value="sydney">Sydney</option>
+                                <option value="melbourne">Melbourne</option>
+                                <option value="brisbane">Brisbane</option>
+                                <option value="perth">Perth</option>
+                                <option value="adelaide">Adelaide</option>
+                                <option value="canberra">Canberra</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="source" class="form-label">Source</label>
+                            <select id="source" name="source" class="form-control">
+                                <option value="both">Both Sources</option>
+                                <option value="gradconnection">GradConnection</option>
+                                <option value="seek">Seek</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+                        <button type="submit" class="btn btn-primary search-button">
+                            <i class="fas fa-search"></i> Search Jobs
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div class="results-section mt-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h3><i class="fas fa-briefcase"></i> Job Results</h3>
+                <div class="input-group" style="max-width: 300px;">
+                    <input type="text" class="form-control" id="result-filter" placeholder="Filter results...">
+                    <span class="input-group-text"><i class="fas fa-search"></i></span>
+                </div>
+            </div>
+            
+            <!-- Progress Bar -->
+            <div id="progress-container" class="mb-4 d-none">
+                <div class="d-flex justify-content-between mb-1">
+                    <span id="progress-status">Searching...</span>
+                    <span id="progress-percentage">0%</span>
+                </div>
+                <div class="progress" style="height: 20px;">
+                    <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                         role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                </div>
+            </div>
+            
+            <!-- Advanced Filtering Options -->
+            <div id="advanced-filters" class="card mb-4 d-none">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-3">Advanced Filters</h6>
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label for="filter-job-type" class="form-label">Job Type</label>
+                            <select class="form-select" id="filter-job-type">
+                                <option value="">All Types</option>
+                                <!-- Options will be populated dynamically -->
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="filter-company" class="form-label">Company</label>
+                            <select class="form-select" id="filter-company">
+                                <option value="">All Companies</option>
+                                <!-- Options will be populated dynamically -->
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="filter-city" class="form-label">City</label>
+                            <select class="form-select" id="filter-city">
+                                <option value="">All Cities</option>
+                                <!-- Options will be populated dynamically -->
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="filter-source" class="form-label">Source</label>
+                            <select class="form-select" id="filter-source">
+                                <option value="">All Sources</option>
+                                <option value="GradConnection">GradConnection</option>
+                                <option value="Seek">Seek</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row g-3 mt-1">
+                        <div class="col-md-4">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="" id="filter-international">
+                                <label class="form-check-label" for="filter-international">
+                                    Accepts International Students
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-8">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <label for="filter-closing-from" class="form-label">Closing Date From</label>
+                                    <input type="date" class="form-control" id="filter-closing-from">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="filter-closing-to" class="form-label">Closing Date To</label>
+                                    <input type="date" class="form-control" id="filter-closing-to">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-3">
+                        <button type="button" class="btn btn-outline-secondary" id="reset-filters">
+                            <i class="fas fa-undo"></i> Reset Filters
+                        </button>
+                        <button type="button" class="btn btn-primary" id="apply-filters">
+                            <i class="fas fa-filter"></i> Apply Filters
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="loader" class="text-center d-none">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2">Searching for jobs... This may take a minute.</p>
+            </div>
+            
+            <div id="results-container" class="row">
+                <div class="col-12 text-center initial-message">
+                    <i class="fas fa-search fa-3x mb-3 text-muted"></i>
+                    <p class="text-muted">Use the filters above to search for jobs</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer mt-5 py-3">
+        <div class="container text-center">
+            <span class="text-muted">© 2023 JobScrape | Powered by GradConnection and Seek</span>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html> 
