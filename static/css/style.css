@@ -111,6 +111,7 @@ body {
     border-radius: 10px;
     overflow: hidden;
     border: 1px solid #e1e5eb;
+    background: white;
 }
 
 .job-card:hover {
@@ -121,7 +122,7 @@ body {
 .job-card .card-header {
     background: white;
     border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-    padding: 1rem 1.25rem;
+    padding: 1.25rem;
     position: relative;
 }
 
@@ -129,15 +130,22 @@ body {
     font-weight: 600;
     color: var(--dark);
     margin-bottom: 0.5rem;
-    padding-right: 80px; /* Make room for the badge */
     line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    height: 2.8em;
 }
 
 .job-card .company-name {
     color: var(--primary);
     font-weight: 500;
-    margin-bottom: 0.75rem;
+    margin-bottom: 0.25rem;
     display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .job-card .source-badge {
@@ -152,20 +160,27 @@ body {
 .job-card .source-tag {
     display: inline-block;
     font-size: 0.75rem;
-    margin-bottom: 0.5rem;
     color: #666;
+    background: #f8f9fa;
+    padding: 0.25rem 0.75rem;
+    border-radius: 4px;
+    margin-bottom: 0.75rem;
+    font-weight: 500;
 }
 
 .job-card .source-tag.seek {
     color: #e74c3c;
+    background: rgba(231, 76, 60, 0.1);
 }
 
 .job-card .source-tag.gradconnection {
     color: #2980b9;
+    background: rgba(41, 128, 185, 0.1);
 }
 
 .job-card .source-tag.prosple {
     color: #27ae60;
+    background: rgba(39, 174, 96, 0.1);
 }
 
 .job-card .card-body {
@@ -173,6 +188,7 @@ body {
     display: flex;
     flex-direction: column;
     padding: 1.25rem;
+    min-height: 200px;
 }
 
 .job-card .job-details-container {
@@ -180,13 +196,15 @@ body {
     grid-template-columns: 1fr;
     gap: 0.75rem;
     margin-bottom: 1rem;
+    flex: 1;
 }
 
 .job-card .job-detail {
     display: grid;
     grid-template-columns: 24px 1fr;
     gap: 0.5rem;
-    align-items: center;
+    align-items: start;
+    min-height: 24px;
 }
 
 .job-card .job-detail i {
@@ -200,6 +218,10 @@ body {
     color: #555;
     font-size: 0.9rem;
     line-height: 1.4;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
 }
 
 .job-card .job-title {
@@ -242,8 +264,11 @@ body {
     border-radius: 6px;
     font-weight: 500;
     transition: all 0.3s ease;
+    padding: 0.75rem 1rem;
     margin-top: auto;
-    padding: 0.6rem 1rem;
+    text-align: center;
+    color: white;
+    text-decoration: none;
 }
 
 .job-card .btn-apply:hover {
@@ -447,4 +472,43 @@ body {
 .col-md-6.col-lg-4.job-result-item {
     margin-bottom: 1.5rem;
     padding: 0 12px;
+}
+
+/* Sorting Controls */
+.sort-controls {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    padding: 0.5rem;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.sort-controls label {
+    font-weight: 500;
+    color: #555;
+    margin: 0;
+}
+
+.sort-controls select {
+    border: 1px solid #e1e5eb;
+    border-radius: 6px;
+    padding: 0.4rem 2rem 0.4rem 0.8rem;
+    font-size: 0.9rem;
+    color: #555;
+    background-color: white;
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23555' d='M6 8.825L1.175 4 2.238 2.938 6 6.7l3.763-3.763L10.825 4z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.8rem center;
+    background-size: 12px;
+}
+
+.sort-controls select:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.2);
 } 

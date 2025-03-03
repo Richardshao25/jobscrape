@@ -222,6 +222,9 @@ document.addEventListener('DOMContentLoaded', function() {
             `;
             resultsContainer.appendChild(resultsCount);
             
+            // Add sorting controls
+            addSortingControls();
+            
             // Add toggle filters button functionality
             document.getElementById('toggle-filters-btn').addEventListener('click', function() {
                 if (advancedFilters.classList.contains('d-none')) {
@@ -273,6 +276,7 @@ document.addEventListener('DOMContentLoaded', function() {
         col.setAttribute('data-closing-date', job.closing_date || '');
         col.setAttribute('data-international', job.international?.toLowerCase() || 'no');
         col.setAttribute('data-url', job.link || '');
+        col.setAttribute('data-date-posted', job.date_posted || '');
         
         // Determine the source class for styling
         let sourceClass = '';
@@ -288,9 +292,9 @@ document.addEventListener('DOMContentLoaded', function() {
         let html = `
             <div class="card job-card">
                 <div class="card-header">
-                    <span class="badge source-badge badge-${sourceClass}">${job.source}</span>
                     <h5 class="card-title">${job.title || 'Untitled Position'}</h5>
                     <h6 class="company-name">${job.company || 'Unknown Company'}</h6>
+                    <span class="source-tag ${sourceClass}">${job.source}</span>
                 </div>
                 <div class="card-body">
                     <div class="job-details-container">
@@ -356,11 +360,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // Complete the card HTML
         html += `
                     </div>
-                    <div class="d-grid gap-2 mt-3">
-                        <a href="${job.link}" target="_blank" class="btn btn-primary btn-apply">
-                            <i class="fas fa-external-link-alt"></i> View Job
-                        </a>
-                    </div>
+                    <a href="${job.link}" target="_blank" class="btn btn-apply">
+                        <i class="fas fa-external-link-alt me-2"></i>View Job
+                    </a>
                 </div>
             </div>
         `;
@@ -380,7 +382,7 @@ document.addEventListener('DOMContentLoaded', function() {
         jobTypeFilter.innerHTML = '<option value="">All Types</option>';
         companyFilter.innerHTML = '<option value="">All Companies</option>';
         cityFilter.innerHTML = '<option value="">All Cities</option>';
-        sourceFilter.innerHTML = '<option value="">All Sources</option><option value="GradConnection">GradConnection</option><option value="Seek">Seek</option><option value="Prosple">Prosple</option>';
+        sourceFilter.innerHTML = '<option value="">All Sources</option><option value="GradConnection">GradConnection</option><option value="Seek">Seek</option>';
         
         // Extract unique values for each filter
         const jobTypes = new Set();
@@ -558,5 +560,45 @@ document.addEventListener('DOMContentLoaded', function() {
                 <p class="text-danger">${message}</p>
             </div>
         `;
+    }
+    
+    // Add sorting functionality
+    function addSortingControls() {
+        const resultsCount = document.querySelector('.results-count');
+        if (!resultsCount) return;
+        
+        const sortControls = document.createElement('div');
+        sortControls.className = 'sort-controls';
+        sortControls.innerHTML = `
+            <label for="sort-jobs">Sort by:</label>
+            <select id="sort-jobs" class="form-select">
+                <option value="closing-soon">Closing Soon</option>
+                <option value="closing-later">Closing Later</option>
+            </select>
+        `;
+        
+        resultsCount.appendChild(sortControls);
+        
+        // Add event listener for sorting
+        document.getElementById('sort-jobs').addEventListener('change', function(e) {
+            const sortBy = e.target.value;
+            const jobItems = document.querySelectorAll('.job-result-item');
+            const jobArray = Array.from(jobItems);
+            
+            jobArray.sort((a, b) => {
+                switch(sortBy) {
+                    case 'closing-soon':
+                        return new Date(a.getAttribute('data-closing-date')) - new Date(b.getAttribute('data-closing-date'));
+                    case 'closing-later':
+                        return new Date(b.getAttribute('data-closing-date')) - new Date(a.getAttribute('data-closing-date'));
+                    default:
+                        return 0;
+                }
+            });
+            
+            // Re-append sorted items
+            const resultsContainer = document.getElementById('results-container');
+            jobArray.forEach(item => resultsContainer.appendChild(item));
+        });
     }
 }); 
