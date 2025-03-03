@@ -1,6 +1,11 @@
-flask==2.3.3
+flask==3.0.0
 requests==2.31.0
 beautifulsoup4==4.12.2
-pandas==2.1.1
 python-dateutil==2.8.2
-urllib3==2.0.7 
+pdfminer.six==20221105
+Werkzeug==3.0.1
+urllib3==2.1.0
+python-docx==0.8.11
+lxml==4.9.3
+python-docx[lxml]
+pdfminer==20191125  # for PDF text extraction 

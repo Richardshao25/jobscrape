@@ -1,7 +1,6 @@
-from flask import Flask, render_template, request, jsonify, Response, stream_with_context
+from flask import Flask, render_template, request, jsonify, Response, stream_with_context, session
 import requests
 from bs4 import BeautifulSoup
-import pandas as pd
 import time
 import re
 import json
@@ -11,13 +10,37 @@ import urllib3
 import os
 import traceback
 import random
+from werkzeug.utils import secure_filename
+import PyPDF2
+import docx
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+import uuid
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 app = Flask(__name__)
+app.secret_key = os.urandom(24)  # Add a secret key for session management
+
+# Add these constants at the top of the file
+UPLOAD_FOLDER = 'uploads'
+ALLOWED_EXTENSIONS = {'pdf', 'doc', 'docx'}
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+# Create uploads directory if it doesn't exist
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+# Global variable to store jobs
+all_jobs = []
 
 class CustomError(Exception):
     pass
+
+def add_job_id(job):
+    job_id = str(uuid.uuid4())
+    job['id'] = job_id
+    print(f"Generated job ID: {job_id} for {job.get('title', 'Untitled')} at {job.get('company', 'Unknown Company')}")
+    return job
 
 def grad_connection_scrape(job_level, discipline, location="australia"):
     """Scrape job listings from GradConnection"""
@@ -46,185 +69,239 @@ def grad_connection_scrape(job_level, discipline, location="australia"):
         else:
             url = f"{base_url}?page={page_num}"
 
-        # Send a GET request
-        try:
-            yield json.dumps({"progress": current_progress, "status": f"Connecting to GradConnection page {page_num}..."})
-            response = requests.get(url, headers=headers, verify=False, timeout=15)
-            
-            # Break the loop if the request failed
-            if response.status_code != 200:
-                print(f"Failed to retrieve page {page_num}. Status code: {response.status_code}")
-                yield json.dumps({"warning": f"Failed to retrieve GradConnection page {page_num}. Status code: {response.status_code}"})
-                break
-            
-            # Parse the HTML content
-            soup = BeautifulSoup(response.content, 'html.parser')
-            
-            # Find all job listings - try different selectors as the site might have changed
-            job_listings = soup.find_all('a', class_='box-header-title')
-            
-            # If no jobs found with the primary selector, try alternative selectors
-            if not job_listings:
-                # Try other potential selectors
-                job_listings = soup.find_all('a', class_='job-title')
-                if not job_listings:
-                    job_listings = soup.select('.job-listing a[href*="/job/"]')
-                if not job_listings:
-                    job_listings = soup.select('article a[href*="/job/"]')
-                if not job_listings:
-                    job_listings = soup.select('a[href*="/job/"]')
-            
-            if not job_listings:
-                print(f"No job listings found on page {page_num} using any selector.")
-                yield json.dumps({"warning": f"No job listings found on GradConnection page {page_num}."})
-                break
-            
-            # Check if we've reached the last page (no new jobs)
-            if len(job_listings) == 0 or (last_page_count == len(job_listings) and page_num > 1):
-                print(f"No more job listings found after page {page_num-1}.")
-                yield json.dumps({"warning": f"No more job listings found after GradConnection page {page_num-1}."})
-                break
-            
-            last_page_count = len(job_listings)
-            total_jobs_found += len(job_listings)
-            yield json.dumps({"progress": current_progress, "status": f"Found {len(job_listings)} jobs on GradConnection page {page_num}"})
-            
-            # Calculate total expected steps for progress bar
-            total_steps = total_jobs_found * 2  # Each job needs 2 requests (listing page and detail page)
-            
-            # Extract details for each job
-            job_index = 0
-            for job in job_listings:
-                job_index += 1
-                current_progress = ((page_num - 1) * len(job_listings) + job_index) / (total_jobs_found * 1.5) * 50  # GradConnection takes 50% of progress
-                yield json.dumps({"progress": current_progress, "status": f"Scraping GradConnection page {page_num}, job {job_index}/{len(job_listings)}"})
+        # Send a GET request with increased timeout and retries
+        max_retries = 3
+        retry_count = 0
+        success = False
+        
+        while retry_count < max_retries and not success:
+            try:
+                yield json.dumps({"progress": current_progress, "status": f"Connecting to GradConnection page {page_num}..."})
+                response = requests.get(url, headers=headers, verify=False, timeout=30)  # Increased timeout to 30 seconds
                 
-                # Get the job URL - handle different element structures
-                job_link = None
-                if job.has_attr('href'):
-                    job_link = str(job.get('href'))
+                # Break the loop if the request failed
+                if response.status_code != 200:
+                    print(f"Failed to retrieve page {page_num}. Status code: {response.status_code}")
+                    yield json.dumps({"warning": f"Failed to retrieve GradConnection page {page_num}. Status code: {response.status_code}"})
+                    break
                 
-                if not job_link:
+                success = True
+                
+            except requests.exceptions.Timeout:
+                retry_count += 1
+                if retry_count < max_retries:
+                    yield json.dumps({"warning": f"Timeout connecting to GradConnection, retrying (attempt {retry_count}/{max_retries})..."})
+                    time.sleep(2 * retry_count)  # Exponential backoff
                     continue
+                else:
+                    yield json.dumps({"error": "Failed to connect to GradConnection after multiple attempts"})
+                    return jobs_list
+            except Exception as e:
+                print(f"Error accessing GradConnection: {str(e)}")
+                yield json.dumps({"error": f"Error accessing GradConnection: {str(e)}"})
+                return jobs_list
+        
+        if not success:
+            return jobs_list
+            
+        # Parse the HTML content
+        soup = BeautifulSoup(response.content, 'html.parser')
+        
+        # Find all job listings - try different selectors as the site might have changed
+        job_listings = soup.find_all('a', class_='box-header-title')
+        
+        # If no jobs found with the primary selector, try alternative selectors
+        if not job_listings:
+            # Try other potential selectors
+            job_listings = soup.find_all('a', class_='job-title')
+            if not job_listings:
+                job_listings = soup.select('.job-listing a[href*="/job/"]')
+            if not job_listings:
+                job_listings = soup.select('article a[href*="/job/"]')
+            if not job_listings:
+                job_listings = soup.select('a[href*="/job/"]')
+        
+        if not job_listings:
+            print(f"No job listings found on page {page_num} using any selector.")
+            yield json.dumps({"warning": f"No job listings found on GradConnection page {page_num}."})
+            break
+        
+        # Check if we've reached the last page (no new jobs)
+        if len(job_listings) == 0 or (last_page_count == len(job_listings) and page_num > 1):
+            print(f"No more job listings found after page {page_num-1}.")
+            yield json.dumps({"warning": f"No more job listings found after GradConnection page {page_num-1}."})
+            break
+        
+        last_page_count = len(job_listings)
+        total_jobs_found += len(job_listings)
+        yield json.dumps({"progress": current_progress, "status": f"Found {len(job_listings)} jobs on GradConnection page {page_num}"})
+        
+        # Extract details for each job
+        job_index = 0
+        for job in job_listings:
+            job_index += 1
+            current_progress = ((page_num - 1) * len(job_listings) + job_index) / (total_jobs_found * 1.5) * 50
+            yield json.dumps({"progress": current_progress, "status": f"Scraping GradConnection page {page_num}, job {job_index}/{len(job_listings)}"})
+            
+            # Get the job URL - handle different element structures
+            job_link = None
+            if job.has_attr('href'):
+                job_link = str(job.get('href'))
+            
+            if not job_link:
+                continue
+            
+            if not "notifyme" in job_link:
+                # Ensure the URL is absolute
+                if job_link.startswith('/'):
+                    current_url = local_url + job_link
+                elif job_link.startswith('http'):
+                    current_url = job_link
+                else:
+                    current_url = local_url + '/' + job_link
                 
-                if not "notifyme" in job_link:
-                    # Ensure the URL is absolute
-                    if job_link.startswith('/'):
-                        current_url = local_url + job_link
-                    elif job_link.startswith('http'):
-                        current_url = job_link
-                    else:
-                        current_url = local_url + '/' + job_link
+                try:
+                    # Fetch job details with increased timeout and retries
+                    max_retries = 3
+                    retry_count = 0
+                    job_response = None
                     
-                    try:
-                        job_response = requests.get(current_url, headers=headers, verify=False, timeout=15)
-                        if job_response.status_code != 200:
-                            print(f"Failed to retrieve job details. Status code: {job_response.status_code}")
-                            continue
-                            
-                        job_soup = BeautifulSoup(job_response.content, 'html.parser')
+                    while retry_count < max_retries and not job_response:
+                        try:
+                            job_response = requests.get(current_url, headers=headers, verify=False, timeout=30)
+                            if job_response.status_code != 200:
+                                print(f"Failed to retrieve job details. Status code: {job_response.status_code}")
+                                break
+                        except requests.exceptions.Timeout:
+                            retry_count += 1
+                            if retry_count < max_retries:
+                                time.sleep(2 * retry_count)
+                                continue
+                            else:
+                                print(f"Failed to retrieve job details after {max_retries} attempts")
+                                break
+                    
+                    if not job_response:
+                        continue
+                        
+                    job_soup = BeautifulSoup(job_response.content, 'html.parser')
 
-                        # Extract job details
-                        job_type = None
-                        disciplines = None
-                        job_location = None
-                        international = None
-                        closing_date = None
-                        position_start_date = None
-                        
-                        # Try to find job details with different selectors
-                        job_detail = job_soup.find_all('li', class_='box-content-catagories catagories-list')
-                        if not job_detail:
-                            job_detail = job_soup.select('.job-details li')
-                        
-                        if job_detail:
-                            for detail in job_detail:
-                                strong_tag = detail.find('strong', class_='box-content-catagories-bold')
-                                if not strong_tag:
-                                    strong_tag = detail.find('strong')
-                                
-                                if strong_tag:
-                                    strong_text = strong_tag.get_text().strip()
-                                    detail_text = detail.get_text().strip()
-                                    
-                                    if "Job type" in strong_text:
-                                        job_type = detail_text.replace(strong_text, "").strip()
-                                    elif "Disciplines" in strong_text:
-                                        disciplines = detail_text.replace(strong_text, "").strip()
-                                    elif "Locations" in strong_text:
-                                        # Extract the full location text
-                                        location_text = detail_text.replace(strong_text, "").strip()
-                                        # Handle "show more" in locations
-                                        if "show more" in location_text:
-                                            # Extract all cities by removing the "show more" text
-                                            job_location = location_text.replace("...show more", "").strip()
-                                        else:
-                                            job_location = location_text
-                                    elif "ACCEPTS INTERNATIONAL" in strong_text:
-                                        international = "Yes"
-                                    elif "Closing Date" in strong_text:
-                                        closing_date_text = detail_text.replace(strong_text, "").strip()
-                                        try:
-                                            closing_date = parse(closing_date_text)
-                                            closing_date = closing_date.strftime("%Y-%m-%d")
-                                        except:
-                                            closing_date = closing_date_text
-                                    elif "Position Start Date" in strong_text:
-                                        position_start_date = detail_text.replace(strong_text, "").strip()
-                        
-                        # Try different selectors for company name and job title
-                        company_name_elem = job_soup.find('h1', class_='employers-panel-title')
-                        if not company_name_elem:
-                            company_name_elem = job_soup.select_one('.company-name')
-                        
-                        program_name_elem = job_soup.find('h1', class_='employers-profile-h1')
-                        if not program_name_elem:
-                            program_name_elem = job_soup.select_one('.job-title')
-                        
-                        # If we still don't have a job title, try to extract from the URL or page title
-                        if not program_name_elem:
-                            page_title = job_soup.find('title')
-                            if page_title:
-                                program_name = page_title.get_text().split(' | ')[0].strip()
-                            else:
-                                program_name = job_link.split('/')[-1].replace('-', ' ').title()
-                        else:
-                            program_name = program_name_elem.get_text().strip()
-                        
-                        # If we still don't have a company name, extract from the page or URL
-                        if not company_name_elem:
-                            company_meta = job_soup.find('meta', property='og:site_name')
-                            if company_meta:
-                                company_name = company_meta.get('content', 'Unknown Company')
-                            else:
-                                company_name = job_link.split('/')[3].replace('-', ' ').title()
-                        else:
-                            company_name = company_name_elem.get_text().strip()
-                        
-                        # Skip certain companies
-                        if company_name.lower() not in ["readygrad", "gradconnection", "careerdc", "premium graduate placements"]:
-                            jobs_list.append({
-                                'title': program_name,
-                                'company': company_name,
-                                'link': current_url,
-                                'job_type': job_type,
-                                'disciplines': disciplines,
-                                'location': job_location,
-                                'international': international,
-                                'position_start_date': position_start_date,
-                                'closing_date': closing_date,
-                                'source': 'GradConnection'
-                            })
-                    except Exception as e:
-                        print(f"Error processing job: {str(e)}")
-                        traceback.print_exc()
+                    # Extract job details
+                    job_type = None
+                    disciplines = None
+                    job_location = None
+                    international = None
+                    closing_date = None
+                    position_start_date = None
+                    description = None
+                    company_info = None
                     
-                    # Add a small delay to be respectful
-                    time.sleep(0.5)
-        except Exception as e:
-            print(f"Error scraping page {page_num}: {str(e)}")
-            traceback.print_exc()
-            yield json.dumps({"error": f"Error scraping GradConnection page {page_num}: {str(e)}"})
+                    # Try to find job details with different selectors
+                    job_detail = job_soup.find_all('li', class_='box-content-catagories catagories-list')
+                    if not job_detail:
+                        job_detail = job_soup.select('.job-details li')
+                    
+                    if job_detail:
+                        for detail in job_detail:
+                            strong_tag = detail.find('strong', class_='box-content-catagories-bold')
+                            if not strong_tag:
+                                strong_tag = detail.find('strong')
+                            
+                            if strong_tag:
+                                strong_text = strong_tag.get_text().strip()
+                                detail_text = detail.get_text().strip()
+                                
+                                if "Job type" in strong_text:
+                                    job_type = detail_text.replace(strong_text, "").strip()
+                                elif "Disciplines" in strong_text:
+                                    disciplines = detail_text.replace(strong_text, "").strip()
+                                elif "Locations" in strong_text:
+                                    location_text = detail_text.replace(strong_text, "").strip()
+                                    if "show more" in location_text:
+                                        job_location = location_text.replace("...show more", "").strip()
+                                    else:
+                                        job_location = location_text
+                                elif "ACCEPTS INTERNATIONAL" in strong_text:
+                                    international = "Yes"
+                                elif "Closing Date" in strong_text:
+                                    closing_date_text = detail_text.replace(strong_text, "").strip()
+                                    try:
+                                        closing_date = parse(closing_date_text)
+                                        closing_date = closing_date.strftime("%Y-%m-%d")
+                                    except:
+                                        closing_date = closing_date_text
+                                elif "Position Start Date" in strong_text:
+                                    position_start_date = detail_text.replace(strong_text, "").strip()
+                    
+                    # Extract job description
+                    description_elem = job_soup.find('div', class_='job-description')
+                    if not description_elem:
+                        description_elem = job_soup.select_one('.description, .job-details, .opportunity-description')
+                    if description_elem:
+                        description = description_elem.get_text().strip()
+                    
+                    # Extract company information
+                    company_info_elem = job_soup.find('div', class_='employer-profile')
+                    if not company_info_elem:
+                        company_info_elem = job_soup.select_one('.company-profile, .employer-details')
+                    if company_info_elem:
+                        company_info = company_info_elem.get_text().strip()
+                    
+                    # Try different selectors for company name and job title
+                    company_name_elem = job_soup.find('h1', class_='employers-panel-title')
+                    if not company_name_elem:
+                        company_name_elem = job_soup.select_one('.company-name')
+                    
+                    program_name_elem = job_soup.find('h1', class_='employers-profile-h1')
+                    if not program_name_elem:
+                        program_name_elem = job_soup.select_one('.job-title')
+                    
+                    # If we still don't have a job title, try to extract from the URL or page title
+                    if not program_name_elem:
+                        page_title = job_soup.find('title')
+                        if page_title:
+                            program_name = page_title.get_text().split(' | ')[0].strip()
+                        else:
+                            program_name = job_link.split('/')[-1].replace('-', ' ').title()
+                    else:
+                        program_name = program_name_elem.get_text().strip()
+                    
+                    # If we still don't have a company name, extract from the page or URL
+                    if not company_name_elem:
+                        company_meta = job_soup.find('meta', property='og:site_name')
+                        if company_meta:
+                            company_name = company_meta.get('content', 'Unknown Company')
+                        else:
+                            company_name = job_link.split('/')[3].replace('-', ' ').title()
+                    else:
+                        company_name = company_name_elem.get_text().strip()
+                    
+                    # Skip certain companies
+                    if company_name.lower() not in ["readygrad", "gradconnection", "careerdc", "premium graduate placements"]:
+                        job_data = {
+                            'title': program_name,
+                            'company': company_name,
+                            'link': current_url,
+                            'job_type': job_type,
+                            'disciplines': disciplines,
+                            'location': job_location,
+                            'international': international,
+                            'position_start_date': position_start_date,
+                            'closing_date': closing_date,
+                            'description': description,
+                            'company_info': company_info,
+                            'source': 'GradConnection'
+                        }
+                        # Add job ID before adding to list
+                        job_data = add_job_id(job_data)
+                        jobs_list.append(job_data)
+                        yield json.dumps({"results": [job_data]})
+                except Exception as e:
+                    print(f"Error processing job: {str(e)}")
+                    traceback.print_exc()
+                
+                # Add a small delay to be respectful
+                time.sleep(0.5)
         
         # Check if we've reached the pagination limit or the end of the job listings
         pagination = soup.select('.pagination a')
@@ -421,7 +498,7 @@ def seek_scrape(job_level, discipline, location="All-Australia"):
                             job_type_elem = job.select_one('.work-type, .job-type, [data-automation="jobWorkType"]')
                         job_type = job_type_elem.get_text().strip() if job_type_elem else None
                         
-                        jobs_list.append({
+                        job_data = {
                             'title': title,
                             'company': company_name,
                             'link': url_new,
@@ -429,7 +506,11 @@ def seek_scrape(job_level, discipline, location="All-Australia"):
                             'date_posted': date_text,
                             'job_type': job_type,
                             'source': 'Seek'
-                        })
+                        }
+                        # Add job ID before adding to list
+                        job_data = add_job_id(job_data)
+                        jobs_list.append(job_data)
+                        yield json.dumps({"results": [job_data]})
                 except Exception as e:
                     print(f"Error processing Seek job: {str(e)}")
                     traceback.print_exc()
@@ -552,7 +633,7 @@ def prosple_scrape(job_level, discipline, location="australia"):
     local_url = 'https://au.prosple.com'
     page_num = 1
     jobs_list = []
-    max_pages = 5  # Limit pages to avoid blocking
+    max_pages = 10  # Limit pages to avoid blocking
     total_jobs_found = 0
     current_progress = 0
     last_page_count = -1
@@ -785,7 +866,7 @@ def prosple_scrape(job_level, discipline, location="australia"):
                                 closing_date = closing_date_text
                         
                         # Add job to our list
-                        jobs_list.append({
+                        job_data = {
                             'title': job_title,
                             'company': company_name,
                             'link': job_url,
@@ -795,7 +876,10 @@ def prosple_scrape(job_level, discipline, location="australia"):
                             'disciplines': prosple_discipline.replace('-', ' ').title(),
                             'international': None,
                             'source': 'Prosple'
-                        })
+                        }
+                        # Add job ID before adding to list
+                        job_data = add_job_id(job_data)
+                        jobs_list.append(job_data)
                         
                         total_jobs_found += 1
                 
@@ -1028,7 +1112,7 @@ def prosple_scrape(job_level, discipline, location="australia"):
                             closing_date = closing_date_text
                     
                     # Add job to results
-                    jobs_list.append({
+                    job_data = {
                         'title': title,
                         'company': company,
                         'link': job_url,
@@ -1038,7 +1122,10 @@ def prosple_scrape(job_level, discipline, location="australia"):
                         'disciplines': prosple_discipline.replace('-', ' ').title(),
                         'international': None,
                         'source': 'Prosple'
-                    })
+                    }
+                    # Add job ID before adding to list
+                    job_data = add_job_id(job_data)
+                    jobs_list.append(job_data)
                     
                 except Exception as e:
                     print(f"Error processing Prosple job: {str(e)}")
@@ -1090,6 +1177,19 @@ def search():
     discipline = data.get('discipline', 'computer-science')
     location = data.get('location', 'australia')
     source = data.get('source', 'both')
+    
+    # Store search parameters in session
+    session['last_search'] = {
+        'job_level': job_level,
+        'discipline': discipline,
+        'location': location,
+        'source': source
+    }
+    
+    # Clear previous jobs
+    global all_jobs
+    all_jobs = []
+    print("Cleared previous jobs list")
     
     # If 'prosple' or 'all' is selected, change to 'both' (only GradConnection and Seek)
     if source in ['prosple', 'all']:
@@ -1185,6 +1285,9 @@ def search():
                             if 'location' in job and job['location']:
                                 job['location'] = normalize_location(job['location'])
                         results.extend(update_data['results'])
+                        # Update global jobs list
+                        all_jobs.extend(update_data['results'])
+                        print(f"Added {len(update_data['results'])} jobs from GradConnection. Total jobs: {len(all_jobs)}")
                     yield json.dumps(update_data) + '\n'
             except Exception as e:
                 print(f"Error in GradConnection scraping: {str(e)}")
@@ -1231,18 +1334,246 @@ def search():
                             if 'location' in job and job['location']:
                                 job['location'] = normalize_location(job['location'])
                         results.extend(update_data['results'])
+                        # Update global jobs list
+                        all_jobs.extend(update_data['results'])
+                        print(f"Added {len(update_data['results'])} jobs from Seek. Total jobs: {len(all_jobs)}")
                     yield json.dumps(update_data) + '\n'
             except Exception as e:
                 print(f"Error in Seek scraping: {str(e)}")
                 traceback.print_exc()
                 yield json.dumps({"error": str(e), "source": "Seek"}) + '\n'
         
-        # Prosple scraping code removed as requested
-        
         # Return final results after normalizing locations
+        print(f"Search complete. Total jobs found: {len(all_jobs)}")
         yield json.dumps({"complete": True, "results": results}) + '\n'
     
     return Response(stream_with_context(generate()), content_type='text/event-stream')
+
+@app.route('/search-results')
+def search_results():
+    # Get the last search parameters from session
+    last_search = session.get('last_search')
+    if not last_search:
+        return redirect('/')
+    
+    # If we have a current job ID in the session, remove it
+    if 'current_job_id' in session:
+        del session['current_job_id']
+    
+    return render_template('search_results.html', 
+                         jobs=all_jobs,
+                         search_params=last_search)
+
+@app.route('/job/<job_id>')
+def job_details(job_id):
+    try:
+        print(f"Looking for job with ID: {job_id}")
+        print(f"Total jobs in storage: {len(all_jobs)}")
+        
+        # Find the job in the stored jobs
+        job = next((job for job in all_jobs if job.get('id') == job_id), None)
+        
+        if not job:
+            print(f"Job not found with ID: {job_id}")
+            print("Available job IDs:", [job.get('id') for job in all_jobs])
+            return render_template('error.html', message="Job not found"), 404
+        
+        # Store the current job ID in session for back button functionality
+        session['current_job_id'] = job_id
+        
+        # Debug print the raw job data
+        print("Raw job data:", job)
+        
+        # Helper function to safely get string values
+        def safe_get(data, *keys, default="Not specified"):
+            for key in keys:
+                if key in data and data[key] is not None:
+                    value = data[key]
+                    return str(value) if value != "" else default
+            return default
+        
+        # Ensure all required fields are present with safe value extraction
+        job_data = {
+            'title': safe_get(job, 'title', 'Program Title'),
+            'company': safe_get(job, 'company', 'Company'),
+            'job_type': safe_get(job, 'job_type', 'Job Type'),
+            'disciplines': safe_get(job, 'disciplines', 'Disciplines'),
+            'location': safe_get(job, 'location', 'Location'),
+            'closing_date': safe_get(job, 'closing_date', 'Closing Date'),
+            'position_start_date': safe_get(job, 'position_start_date', 'Position Start Date'),
+            'work_from_home': safe_get(job, 'work_from_home', 'Work from Home'),
+            'international': safe_get(job, 'international', 'International'),
+            'rotation': safe_get(job, 'rotation', 'Rotation'),
+            'program_duration': safe_get(job, 'program_duration', 'Program Duration'),
+            'number_of_positions': safe_get(job, 'number_of_positions', 'Number of Positions'),
+            'salary': safe_get(job, 'salary', 'Salary'),
+            'citizenship_requirements': safe_get(job, 'citizenship_requirements', 'Citizenship Requirements'),
+            'description': safe_get(job, 'description', 'Description', default="No description available"),
+            'company_info': safe_get(job, 'company_info', 'Company Information', default="No company information available"),
+            'requirements': safe_get(job, 'requirements', 'Requirements', default="No specific requirements listed"),
+            'link': safe_get(job, 'link', default='#'),
+            'source': safe_get(job, 'source', default='Unknown'),
+            'id': job_id
+        }
+        
+        print(f"Found job: {job_data['title']} at {job_data['company']}")
+        print(f"Description length: {len(job_data['description'])}")
+        print(f"Requirements length: {len(job_data['requirements'])}")
+        
+        return render_template('job_details.html', job=job_data)
+    except Exception as e:
+        print(f"Error in job_details route: {str(e)}")
+        traceback.print_exc()
+        return render_template('error.html', message="An error occurred while loading the job details"), 500
+
+@app.route('/error')
+def error_page():
+    message = request.args.get('message', 'An error occurred')
+    return render_template('error.html', message=message)
+
+def adjust_resume_with_ollama(resume_text, job_data):
+    """
+    Send request to Ollama to adjust resume based on job requirements
+    """
+    # Prepare the prompt for the model
+    prompt = f"""
+You are an expert resume consultant. Your task is to analyze the provided resume and suggest specific adjustments 
+to better match the job requirements for the following position:
+
+Company: {job_data['company']}
+Position: {job_data['title']}
+Job Type: {job_data['job_type']}
+
+Job Requirements and Details:
+{job_data.get('requirements', 'Not specified')}
+
+Current Resume:
+{resume_text}
+
+Please provide:
+1. A list of specific modifications to make to the resume
+2. Explanation of why each change would make the resume more effective for this position
+3. Any keywords or phrases from the job description that should be incorporated
+4. Skills or experiences to emphasize
+5. Suggested new bullet points for relevant experiences
+
+Format your response in clear sections with specific, actionable suggestions.
+"""
+
+    try:
+        # Send request to local Ollama API
+        response = requests.post('http://localhost:11434/api/generate',
+                              json={
+                                  "model": "llama2",  # or another model you have in Ollama
+                                  "prompt": prompt,
+                                  "stream": False
+                              })
+        
+        if response.status_code == 200:
+            result = response.json()
+            return result.get('response', "Error: No response from model")
+        else:
+            return f"Error: Failed to get response from Ollama (Status code: {response.status_code})"
+            
+    except Exception as e:
+        return f"Error connecting to Ollama: {str(e)}"
+
+@app.route('/analyze-resume', methods=['POST'])
+def analyze_resume_route():
+    if 'resume' not in request.files:
+        return jsonify({'error': 'No resume file uploaded'}), 400
+    
+    file = request.files['resume']
+    job_id = request.form.get('job_id')
+    
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+    
+    if not allowed_file(file.filename):
+        return jsonify({'error': 'Invalid file type'}), 400
+    
+    if not job_id:
+        return jsonify({'error': 'No job ID provided'}), 400
+    
+    # Find the job
+    job = next((job for job in all_jobs if job.get('id') == job_id), None)
+    if not job:
+        return jsonify({'error': 'Job not found'}), 404
+    
+    try:
+        # Save the uploaded file temporarily
+        filename = secure_filename(file.filename)
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(file_path)
+        
+        try:
+            # Extract text from resume
+            resume_text = extract_text_from_resume(file_path)
+            
+            # Get suggestions from Ollama
+            suggestions = adjust_resume_with_ollama(resume_text, job)
+            
+            return jsonify({
+                'suggestions': suggestions,
+                'job_title': job['title'],
+                'company': job['company']
+            })
+            
+        finally:
+            # Clean up the uploaded file
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+def extract_text_from_resume(file_path):
+    """Extract text from a resume file"""
+    try:
+        if file_path.lower().endswith('.pdf'):
+            from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
+            from pdfminer.converter import TextConverter
+            from pdfminer.layout import LAParams
+            from pdfminer.pdfpage import PDFPage
+            from io import StringIO
+
+            # Create a PDF resource manager object
+            rsrcmgr = PDFResourceManager()
+            
+            # Create a string buffer for the extracted text
+            output = StringIO()
+            
+            # Create a text converter object
+            device = TextConverter(rsrcmgr, output, laparams=LAParams())
+            
+            # Open the PDF file
+            with open(file_path, 'rb') as fp:
+                # Create a PDF interpreter object
+                interpreter = PDFPageInterpreter(rsrcmgr, device)
+                
+                # Process each page in the PDF file
+                for page in PDFPage.get_pages(fp):
+                    interpreter.process_page(page)
+                
+                # Get the extracted text
+                text = output.getvalue()
+            
+            # Clean up
+            device.close()
+            output.close()
+            
+            return text
+        else:
+            # For other file types, you might want to add different extraction methods
+            with open(file_path, 'r', encoding='utf-8') as file:
+                return file.read()
+    except Exception as e:
+        raise Exception(f"Failed to extract text from resume: {str(e)}")
+
+def allowed_file(filename):
+    """Check if file type is allowed"""
+    ALLOWED_EXTENSIONS = {'pdf', 'doc', 'docx', 'txt'}
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 if __name__ == '__main__':
     app.run(debug=True) 

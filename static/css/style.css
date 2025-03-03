@@ -511,4 +511,156 @@ body {
     outline: none;
     border-color: var(--primary);
     box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.2);
+}
+
+/* Job Details Page Styles */
+.job-details-card {
+    border: none;
+    border-radius: 12px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+    margin-bottom: 2rem;
+    background: #fff;
+}
+
+.job-details-card .job-title {
+    font-size: 1.75rem;
+    font-weight: 600;
+    color: var(--dark);
+    margin-bottom: 0.5rem;
+}
+
+.job-details-card .company-name {
+    font-size: 1.25rem;
+    color: var(--primary);
+    margin-bottom: 0.5rem;
+}
+
+.section-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--dark);
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #f0f0f0;
+}
+
+.job-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+}
+
+.meta-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #555;
+}
+
+.meta-item i {
+    color: var(--primary);
+    width: 20px;
+}
+
+.description-content, .requirements-content {
+    color: #555;
+    line-height: 1.6;
+}
+
+.company-card {
+    border: none;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.similar-jobs-card {
+    border: none;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.similar-job-item {
+    padding: 1rem;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.similar-job-item:last-child {
+    border-bottom: none;
+}
+
+/* Resume Modification Styles */
+.suggestion-item {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+.suggestion-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.suggestion-content {
+    color: #555;
+    font-size: 0.95rem;
+}
+
+.suggestion-examples {
+    margin-top: 0.5rem;
+    padding-left: 1.5rem;
+}
+
+.suggestion-examples ul {
+    margin-top: 0.25rem;
+    margin-bottom: 0;
+}
+
+.suggestion-examples li {
+    color: #666;
+    margin-bottom: 0.25rem;
+}
+
+/* Resume Upload Styles */
+.resume-upload-section {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.resume-upload-section h6 {
+    margin-bottom: 1rem;
+    color: var(--dark);
+}
+
+/* Job Actions */
+.job-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.job-actions .btn {
+    padding: 0.5rem 1rem;
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 767px) {
+    .job-details-card .job-title {
+        font-size: 1.5rem;
+    }
+    
+    .job-details-card .company-name {
+        font-size: 1.1rem;
+    }
+    
+    .job-actions {
+        flex-direction: column;
+        width: 100%;
+        margin-top: 1rem;
+    }
+    
+    .job-actions .btn {
+        width: 100%;
+    }
 } 

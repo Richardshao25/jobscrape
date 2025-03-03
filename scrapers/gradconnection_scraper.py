@@ -220,8 +220,8 @@ def process_job_details(session, job_url, headers, skip_companies, job_level, jo
     logger.info(f"Processing job {job_num}/{total_jobs}: {job_url}")
     
     try:
-        # Fetch job details page
-        response = session.get(job_url, headers=headers, verify=False, timeout=15)
+        # Fetch job details page with increased timeout
+        response = session.get(job_url, headers=headers, verify=False, timeout=30)
         if response.status_code != 200:
             logger.warning(f"Failed to retrieve job details: {response.status_code}")
             return None
@@ -229,11 +229,11 @@ def process_job_details(session, job_url, headers, skip_companies, job_level, jo
         # Parse the job details page
         soup = BeautifulSoup(response.content, 'html.parser')
         
-        # Extract company name
-        company_elem = soup.select_one('h1.employer-name')
-        if not company_elem:
-            company_elem = soup.select_one('.m-employer-logo h1') or soup.select_one('.employer-branding__title h1')
+        # Debug - save HTML content
+        logger.info(f"HTML Content Length: {len(response.content)}")
         
+        # Extract company name
+        company_elem = soup.select_one('h1.employer-name, .employer-branding__title h1, .m-employer-logo h1, .company-name h1')
         company = company_elem.text.strip() if company_elem else "Unknown Company"
         
         # Skip certain companies that aren't actual job offers
@@ -241,81 +241,155 @@ def process_job_details(session, job_url, headers, skip_companies, job_level, jo
             logger.info(f"Skipping company: {company}")
             return None
 
-        # Extract job title
-        title_elem = soup.select_one('h1.job-header__title')
-        if not title_elem:
-            title_elem = soup.select_one('h1.page-header') or soup.select_one('h1')
-        
+        # Extract job title - try multiple selectors
+        title_elem = soup.select_one('h1.job-header__title, h1.page-header, .opportunity-header h1, .job-title h1')
         title = title_elem.text.strip() if title_elem else "Unknown Title"
         
         # Extract job type
         job_type = "Graduate Job" if job_level == "graduate-jobs" else "Internship"
         
-        # Try to extract disciplines from the metadata
+        # Initialize variables
         disciplines = []
-        discipline_items = soup.select('.opportunity-elements__item')
-        for item in discipline_items:
-            if 'Discipline' in item.text:
-                disciplines_text = item.select_one('.opportunity-elements__value').text.strip()
-                disciplines = [d.strip() for d in disciplines_text.split(',')]
-                break
-
-        # Extract locations
         locations = []
-        location_items = soup.select('.opportunity-elements__item')
-        for item in location_items:
-            if 'Location' in item.text:
-                locations_text = item.select_one('.opportunity-elements__value').text.strip()
-                locations = [loc.strip() for loc in locations_text.split(',')]
-                break
-        
-        location = ', '.join(locations) if locations else "Australia"
-        
-        # Extract closing date
         closing_date = None
-        date_items = soup.select('.opportunity-elements__item')
-        for item in date_items:
-            if 'Closing Date' in item.text:
-                date_text = item.select_one('.opportunity-elements__value').text.strip()
-                try:
-                    closing_date = parse(date_text).strftime('%Y-%m-%d')
-                except:
-                    closing_date = date_text
-                break
-        
-        # Extract position start date
         start_date = None
-        for item in date_items:
-            if 'Start Date' in item.text:
-                start_text = item.select_one('.opportunity-elements__value').text.strip()
-                start_date = start_text
-                break
-        
-        # Extract additional details
         work_from_home = "Not specified"
         international = "Not specified"
+        rotation = "Not specified"
+        program_duration = "Not specified"
+        number_of_positions = "Not specified"
+        salary = "Not specified"
+        citizenship_requirements = "Not specified"
         
-        for item in soup.select('.opportunity-elements__item'):
-            item_text = item.text.lower()
-            if 'work from home' in item_text or 'remote' in item_text:
-                work_from_home = item.select_one('.opportunity-elements__value').text.strip()
-            elif 'international' in item_text:
-                international = item.select_one('.opportunity-elements__value').text.strip()
+        # Collect all content sections
+        full_description = []
+        
+        # Add job title and company as header
+        full_description.append(f"Position: {title}")
+        full_description.append(f"Company: {company}")
+        full_description.append("\n")
+        
+        # Extract all metadata and details
+        detail_items = soup.select('.opportunity-elements__item, .job-details__item, .detail-item, .job-meta__item, dt, .detail-label')
+        for item in detail_items:
+            item_text = item.text.strip()
+            item_lower = item_text.lower()
+            
+            # Extract value from the element
+            value_elem = item.select_one('.opportunity-elements__value, .value, .detail-value, .job-meta__value, dd')
+            value = value_elem.text.strip() if value_elem else item.find_next('dd').text.strip() if item.find_next('dd') else item_text
+            
+            # Store the detail
+            if value and not any(skip in item_lower for skip in ['share', 'print', 'apply']):
+                full_description.append(f"{item_text}: {value}")
+            
+            # Also store in specific fields
+            if 'discipline' in item_lower:
+                disciplines = [d.strip() for d in value.split(',')]
+            elif 'location' in item_lower:
+                locations = [loc.strip() for loc in value.split(',')]
+            elif 'closing date' in item_lower:
+                try:
+                    closing_date = parse(value).strftime('%Y-%m-%d')
+                except:
+                    closing_date = value
+            elif 'start date' in item_lower:
+                start_date = value
+            elif 'work from home' in item_lower or 'remote' in item_lower:
+                work_from_home = value
+            elif 'international' in item_lower:
+                international = value
+            elif 'rotation' in item_lower:
+                rotation = value
+            elif 'program duration' in item_lower or 'duration' in item_lower:
+                program_duration = value
+            elif 'number of position' in item_lower or 'positions available' in item_lower:
+                number_of_positions = value
+            elif 'salary' in item_lower or 'compensation' in item_lower:
+                salary = value
+            elif 'citizenship' in item_lower or 'eligibility' in item_lower:
+                citizenship_requirements = value
+        
+        full_description.append("\n")
+        
+        # Extract content sections with their headers
+        content_sections = {
+            'Overview': ['.job-overview', '.opportunity-overview', '.overview-section'],
+            'Job Description': ['.job-description', '.opportunity-description', '.description-content', '#job-description',
+                              '[data-test="job-description"]', '.content-block--description', '.job-details__description'],
+            'Requirements': ['.requirements', '.job-requirements', '.eligibility-criteria', '#requirements',
+                           '[data-test="job-requirements"]', '.content-block--requirements'],
+            'Responsibilities': ['.responsibilities', '.job-responsibilities', '.role-responsibilities'],
+            'Benefits': ['.benefits', '.perks', '.what-we-offer'],
+            'About the Company': ['.employer-description', '.company-description', '.about-company', '#about-company',
+                                '.content-block--about', '.employer-profile__description'],
+            'Company Culture': ['.culture', '.our-culture', '.work-culture'],
+            'How to Apply': ['.application-process', '.how-to-apply', '.apply-section']
+        }
+        
+        # Extract and add each section
+        for section_title, selectors in content_sections.items():
+            section_content = []
+            for selector in selectors:
+                elements = soup.select(selector)
+                for element in elements:
+                    # Remove unwanted elements
+                    for unwanted in element.find_all(['script', 'style', 'nav', 'header', 'footer']):
+                        unwanted.decompose()
+                    
+                    # Get text content
+                    text = element.get_text(separator='\n', strip=True)
+                    if text and len(text) > 20:  # Only include substantial content
+                        section_content.append(text)
+            
+            if section_content:
+                full_description.append(f"{section_title}:")
+                full_description.append("-" * 40)  # Add separator
+                full_description.extend(section_content)
+                full_description.append("\n")
+        
+        # If no structured content found, try to get all main content
+        if len(full_description) < 5:  # If we don't have much content
+            main_content = soup.select_one('main, .main-content, #main-content, .job-details, .opportunity-details')
+            if main_content:
+                # Remove navigation elements
+                for nav in main_content.find_all(['nav', 'header', 'footer', 'script', 'style']):
+                    nav.decompose()
+                
+                # Get all text content
+                content = main_content.get_text(separator='\n', strip=True)
+                if content:
+                    full_description.append("Job Details:")
+                    full_description.append("-" * 40)
+                    full_description.append(content)
+        
+        # Join all content with proper spacing
+        complete_description = '\n'.join(full_description)
         
         # Create job data dictionary
         job_data = {
-            'Program Title': title,
-            'Company': company,
-            'Job Type': job_type,
-            'Disciplines': ', '.join(disciplines) if disciplines else "Not specified",
-            'Location': location,
-            'Closing Date': closing_date or "Not specified",
-            'Position Start Date': start_date or "Not specified",
-            'Work from Home': work_from_home,
-            'International': international,
-            'Link': job_url,
-            'Source': 'GradConnection'
+            'title': title,
+            'company': company,
+            'job_type': job_type,
+            'disciplines': ', '.join(disciplines) if disciplines else "Not specified",
+            'location': ', '.join(locations) if locations else "Australia",
+            'closing_date': closing_date or "Not specified",
+            'position_start_date': start_date or "Not specified",
+            'work_from_home': work_from_home,
+            'international': international,
+            'rotation': rotation,
+            'program_duration': program_duration,
+            'number_of_positions': number_of_positions,
+            'salary': salary,
+            'citizenship_requirements': citizenship_requirements,
+            'description': complete_description,  # All content is now in the description
+            'link': job_url,
+            'source': 'GradConnection'
         }
+        
+        # Log successful extraction
+        logger.info(f"Successfully extracted job details for: {title} at {company}")
+        logger.info(f"Description length: {len(complete_description)}")
         
         return job_data
         

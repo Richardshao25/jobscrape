@@ -357,17 +357,29 @@ document.addEventListener('DOMContentLoaded', function() {
             `;
         }
         
-        // Complete the card HTML
+        // Complete the card HTML with both buttons
         html += `
                     </div>
-                    <a href="${job.link}" target="_blank" class="btn btn-apply">
-                        <i class="fas fa-external-link-alt me-2"></i>View Job
-                    </a>
+                    <div class="d-grid gap-2">
+                        <a href="/job/${job.id}" class="btn btn-primary">
+                            <i class="fas fa-external-link-alt me-2"></i>View Job
+                        </a>
+                        <button class="btn btn-outline-primary modify-resume-btn" data-job-id="${job.id}">
+                            <i class="fas fa-file-alt me-2"></i>Modify Resume
+                        </button>
+                    </div>
                 </div>
             </div>
         `;
         
         col.innerHTML = html;
+        
+        // Add event listener for resume modification button
+        const modifyResumeBtn = col.querySelector('.modify-resume-btn');
+        modifyResumeBtn.addEventListener('click', function() {
+            window.location.href = `/job/${job.id}`;
+        });
+        
         return col;
     }
     
